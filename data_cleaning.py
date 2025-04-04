@@ -1,56 +1,48 @@
-import streamlit as st
 import pandas as pd
-import time
-from data_cleaning import clean_data
-from visualization import plot_visualizations
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from scipy import stats
 
-st.set_page_config(page_title="Data Cleaning Tool", page_icon="🧹", layout="wide")
+def remove_duplicates(df):
+    return df.drop_duplicates()
 
-st.title("🧹 Automated Data Cleaning Tool")
+def handle_missing(df):
+    imputer = SimpleImputer(strategy='mean')
+    num_cols = df.select_dtypes(include='number').columns
+    df[num_cols] = imputer.fit_transform(df[num_cols])
+    return df
 
-st.sidebar.title("📁 Upload & Options")
-uploaded_file = st.sidebar.file_uploader("Upload CSV File", type=["csv"])
+def handle_outliers(df):
+    num_df = df.select_dtypes(include='number')
+    z_scores = stats.zscore(num_df)
+    return df[(np.abs(z_scores) < 3).all(axis=1)]
 
-if uploaded_file:
-    try:
-        df = pd.read_csv(uploaded_file)
-        cleaned_df = df.copy()
-        
-        tab1, tab2, tab3 = st.tabs(["📄 Raw Data", "🛠 Data Cleaning", "📊 Cleaned Data & Comparisons"])
-        
-        with tab1:
-            st.subheader("📊 Raw Data Preview")
-            st.dataframe(df.head(10))
-            st.info("After previewing raw data, move to Data Cleaning for processing.")
+def normalize_formatting(df):
+    for col in df.select_dtypes(include='object').columns:
+        df[col] = df[col].astype(str).str.strip().str.lower()
+    return df
 
-        with tab2:
-            st.subheader("🔧 Cleaning Options")
-            remove_dupes = st.checkbox("Remove Duplicates")
-            handle_missing_vals = st.checkbox("Handle Missing Values")
-            handle_outliers_flag = st.checkbox("Handle Outliers")
-            normalize_format = st.checkbox("Normalize Text Formatting")
-            scale_numeric = st.checkbox("Scale Numeric Features")
-            encode_cat = st.checkbox("One-Hot Encode Categorical Variables")
-            
-            if st.button("🚀 Clean My Data"):
-                with st.spinner("Processing..."):
-                    options = {
-                        "remove_dupes": remove_dupes,
-                        "handle_missing_vals": handle_missing_vals,
-                        "handle_outliers_flag": handle_outliers_flag,
-                        "normalize_format": normalize_format,
-                        "scale_numeric": scale_numeric,
-                        "encode_cat": encode_cat,
-                    }
-                    cleaned_df = clean_data(cleaned_df, options)
-                    st.success("✅ Data cleaned successfully!")
+def scale_features(df):
+    scaler = StandardScaler()
+    num_cols = df.select_dtypes(include='number').columns
+    df[num_cols] = scaler.fit_transform(df[num_cols])
+    return df
 
-        with tab3:
-            st.subheader("🔍 Cleaned Data Preview")
-            st.dataframe(cleaned_df.head(10))
-            st.download_button("📥 Download Cleaned CSV", cleaned_df.to_csv(index=False).encode('utf-8'), "cleaned_data.csv", "text/csv")
-            st.subheader("📊 Before & After Cleaning Comparisons")
-            plot_visualizations(df, cleaned_df)
+def encode_categoricals(df):
+    return pd.get_dummies(df)
 
-    except Exception as e:
-        st.error(f"❌ Error processing file: {e}")
+def clean_data(df, options):
+    if options["remove_dupes"]:
+        df = remove_duplicates(df)
+    if options["handle_missing_vals"]:
+        df = handle_missing(df)
+    if options["handle_outliers_flag"]:
+        df = handle_outliers(df)
+    if options["normalize_format"]:
+        df = normalize_formatting(df)
+    if options["scale_numeric"]:
+        df = scale_features(df)
+    if options["encode_cat"]:
+        df = encode_categoricals(df)
+    return df
